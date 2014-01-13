@@ -4,6 +4,11 @@ require_relative 'prettytable_to_array'
 # Get all instances
 instances = prettytable_to_array(`nova list --all-tenants --fields tenant_id`)
 
+#If instances.csv doesn't exist create it
+if !File.exists?('instances.csv')
+    File.write('instances.csv', '')
+end
+
 # Load the inventory
 inventory = {}
 File.open('instances.csv').each do |line|
