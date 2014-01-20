@@ -1,5 +1,7 @@
 #!/usr/bin/env ruby
 require_relative 'prettytable_to_array'
+require 'rubygems'
+require 'parallel'
 
 # Get all instances
 instances = prettytable_to_array(`nova list --all-tenants --fields tenant_id`)
@@ -23,7 +25,7 @@ old_inventory = inventory.clone
 # If the instance already exists in the inventory, flag it as still existing.
 # If there's a new instance, build a record of it.
 new_instances = []
-instances.each do |i|
+Parallel.each(instances, :in_threads => 8) do |i|
   if old_inventory[i['ID']]
     old_inventory.delete(i['ID'])
   else
