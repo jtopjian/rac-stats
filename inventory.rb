@@ -64,7 +64,7 @@ end
 File.open('instances.csv', 'w') do |f|
   inventory.each do |k,v|
     unless old_inventory.has_key?(k)
-      f.write("#{v}\n")
+      f.write("#{v.join(',')}")
     end
   end
   new_instances.each do |i|
@@ -98,7 +98,7 @@ end
 File.open('volumes.csv', 'w') do |f|
   volume_inventory.each do |k,v|
     unless old_volume_inventory.has_key?(k)
-      f.write("#{v}\n")
+      f.write("#{v.join(',')}")
     end
   end
   new_volumes.each do |i|
