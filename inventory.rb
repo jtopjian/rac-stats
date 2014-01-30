@@ -3,9 +3,13 @@ require_relative 'prettytable_to_array'
 require 'rubygems'
 require 'parallel' #gem install parallel
 
+# We need to use the cyberabot account as we must be a user of each project/tenant
+cyberabot_src = 'source ~/openstack_rcs/RAC/cyberabot.sh'
+
 # Get all instances
 instances = prettytable_to_array(`nova list --all-tenants --fields tenant_id`)
 volumes = prettytable_to_array(`cinder list --all-tenants`)
+tenants = prettytable_to_array(`keystone tenant-list`)
 
 #If instances.csv doesn't exist create it
 if !File.exists?('instances.csv')
@@ -14,6 +18,10 @@ end
 #If volumes.csv doesn't exist create it
 if !File.exists?('volumes.csv')
     File.write('volumes.csv', '')
+end
+#If floatingIPs.csv doesn't exist create it
+if !File.exists?('floatingIPs.csv')
+    File.write('floatingIPs.csv', '')
 end
 
 # Load the Instance inventory
@@ -30,9 +38,17 @@ File.open('volumes.csv').each do |line|
   volume_inventory[parts[0]] = parts
 end
 
+# Load the floating IP inventory
+floatingIP_inventory = {}
+File.open('floatingIPs.csv').each do |line|
+  parts = line.split(',')
+  volume_inventory[parts[0]] = parts
+end
+
 # Clone the inventories so we can determine what instances/volumes no longer exist
 old_inventory = inventory.clone
 old_volume_inventory = volume_inventory.clone
+old_floatingIP_inventory = floatingIP_inventory.clone
 
 # Loop through the list of currently running instances.
 # If the instance already exists in the inventory, flag it as still existing.
@@ -102,6 +118,44 @@ File.open('volumes.csv', 'w') do |f|
     end
   end
   new_volumes.each do |i|
+    f.write("#{i}\n")
+  end
+end
+
+# Loop through the list of tenants, grabbing IPs
+# If the floatingIP already exists in the inventory, flag it as still existing.
+# If there's a new floatingIP, build a record of it.
+new_floatingIPs = []
+Parallel.each(tenants, :in_threads => 8) do |i|
+if i['enabled'] == "False"
+    next
+  end
+  floatingIPs = prettytable_to_array(`#{cyberabot_src}; OS_TENANT_ID=#{i['id']}; nova floating-ip-list`)
+
+  puts "#{i['name']}: #{floatingIPs.size()}"
+
+  if floatingIPs.size() > 0
+    floatingIPs.each do |ip|
+      if old_floatingIP_inventory[ip['ID']]
+        old_floatingIP_inventory.delete(ip['ID'])
+      else
+        public_ip = ip['Ip']
+        instance_id = ip['Instance Id']
+        fixed_ip = ip['Fixed Ip']
+        new_floatingIPs << "#{public_ip},#{instance_id},#{fixed_ip},#{i['id']}"
+      end
+    end
+  end
+end
+
+# Update the floatingIP.csv file
+File.open('floatingIPs.csv', 'w') do |f|
+  floatingIP_inventory.each do |k,v|
+    unless old_floatingIP_inventory.has_key?(k)
+      f.write("#{v.join(',')}")
+    end
+  end
+  new_floatingIPs.each do |i|
     f.write("#{i}\n")
   end
 end
